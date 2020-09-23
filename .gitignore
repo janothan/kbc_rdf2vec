@@ -137,8 +137,18 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+#Mac
+.DS_Store
+
+#IntelliJ
+.idea/
+
 # Project specific
 playground.py
 wordnet_kbc.nt
 fb15k_kbc.nt
 wn_evaluation_file.txt
+wn_vectors
+test_prediction.txt
+wn_evaluation_file*
+fb15k_evaluation_file*

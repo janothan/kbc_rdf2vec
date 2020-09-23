@@ -1,3 +1,5 @@
+import os
+
 import gensim
 import logging
 from gensim.models import KeyedVectors
@@ -12,7 +14,7 @@ logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8
 
 class Rdf2vecKbc:
 
-    def __init__(self, model_path: str, data_set: DataSet, n: int = 10):
+    def __init__(self, model_path: str, data_set: DataSet, n: int = 10, file_for_predicate_exclusion: str = None):
         """Constructor
 
         Parameters
@@ -23,7 +25,13 @@ class Rdf2vecKbc:
             The dataset for which the prediction shall be performed.
         n : int
             The number of predictions to make for each triple.
+        file_for_predicate_exclusion : str
+            The RDF2Vec model learns embeddings for h,l,t but cannot differentiate between them afterwards. Hence,
+            when doing predictions for h and t, it may also predict l. If the file used to train the embedding is given
+            here, such relations will be removed from the proposal set.
         """
+        if not os.path.isfile(model_path):
+            logging.error(f"Cannot find file: {model_path}\nCurrent working directory: {os.getcwd()}")
 
         if model_path.endswith(".kv"):
             print("Gensim vector file detected.")
@@ -35,6 +43,52 @@ class Rdf2vecKbc:
         self.data_set = data_set
         self.test_set = self.data_set.test_set()
 
+        self._predicates = set()
+        if file_for_predicate_exclusion is not None and os.path.isfile(file_for_predicate_exclusion):
+            self._predicates = self._read_predicates(file_for_predicate_exclusion)
+
+    def _read_predicates(self, file_for_predicate_exclusion) -> set:
+        """Obtain predicates from the given nt file.
+
+        Parameters
+        ----------
+        file_for_predicate_exclusion : str
+            The NT file which shall be checked for predicates.
+
+        Returns
+        -------
+        set
+            A set of predicates (str).
+        """
+        with open(file_for_predicate_exclusion, "r", encoding="utf8") as f:
+            result_set = set()
+            for line in f:
+                tokens = line.split(sep=" ")
+                result_set.add(self.remove_tags(tokens[1]))
+            return result_set
+
+    @staticmethod
+    def remove_tags(string_to_process : str) -> str:
+        """Removes tags around a string. Space-trimming is also applied.
+
+        Parameters
+        ----------
+        string_to_process : str
+            The string for which tags shall be removed.
+
+        Returns
+        -------
+        str
+            Given string without tags.
+
+        """
+        string_to_process = string_to_process.strip(" ")
+        if string_to_process.startswith("<"):
+            string_to_process = string_to_process[1:]
+        if string_to_process.endswith(">"):
+            string_to_process = string_to_process[:len(string_to_process)-1]
+        return string_to_process
+
     def predict(self, file_to_write: str):
         """Performs the actual predictions. A file will be generated.
 
@@ -43,7 +97,6 @@ class Rdf2vecKbc:
         file_to_write : str
             File that shall be written for further evaluation.
         """
-
         with open(file_to_write, "w+", encoding="utf8") as f:
             erroneous_triples = 0
             for triple in self.test_set:
@@ -78,6 +131,7 @@ class Rdf2vecKbc:
             A list of predicted concepts.
         """
         result_with_confidence = self._vectors.most_similar(positive=list(triple[1:]), topn=self.n)
+        result_with_confidence = self._remove_predicates(result_with_confidence)
         result = [i[0] for i in result_with_confidence]
         return result
 
@@ -95,7 +149,15 @@ class Rdf2vecKbc:
             A list of predicted concepts.
         """
         result_with_confidence = self._vectors.most_similar(positive=list(triple[:2]), topn=self.n)
+        result_with_confidence = self._remove_predicates(result_with_confidence)
         result = [i[0] for i in result_with_confidence]
+        return result
+
+    def _remove_predicates(self, list_to_process: List) -> List:
+        result = []
+        for entry in list_to_process:
+            if not entry[0] in self._predicates:
+                result.append(entry)
         return result
 
     def _check_triple(self, triple: List[str]) -> bool:
@@ -122,5 +184,6 @@ class Rdf2vecKbc:
 
 
 if __name__ == "__main__":
-    kbc = Rdf2vecKbc(model_path="../wn_vectors/model.kv", n=10, data_set=DataSet.WN18)
-    kbc.predict("./wn_evaluation_file.txt")
+    kbc = Rdf2vecKbc(model_path="./wn_vectors/model.kv", n=5000, data_set=DataSet.WN18,
+                     file_for_predicate_exclusion="./wordnet_kbc.nt")
+    kbc.predict("./wn_evaluation_file_5000.txt")
