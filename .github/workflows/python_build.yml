@@ -28,7 +28,9 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Install Coveralls
-      run: pip install coveralls
+      run: |
+        pip install coveralls
+        pip install pytest-cov
     - name: Test with pytest and upload coverage
       env:
         COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
