@@ -1,5 +1,6 @@
-# KBC Evaluation
-A simple Python project to generate knowledge base completion files for evaluation given a gensim model.
+# KBC RDF2Vec
+A simple Python project to generate a knowledge base completion file for evaluation given a gensim model.
+The file can then be evaluated using [KBC Evaluation](https://github.com/janothan/kbc_evaluation/).
 
 ## Evaluation File Format
 

@@ -1,20 +1,25 @@
 import os
+import sys
 
 import gensim
 import logging
 from gensim.models import KeyedVectors
-from typing import List
+from typing import List, Any
+
+from tqdm import tqdm
 
 from kbc_rdf2vec.dataset import DataSet
 
 # noinspection PyArgumentList
-logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8'), logging.StreamHandler()],
+logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8')],
                     format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
+# add ", logging.StreamHandler()" to the handlers if debug output is desired in the console
 
 
 class Rdf2vecKbc:
 
-    def __init__(self, model_path: str, data_set: DataSet, n: int = 10, file_for_predicate_exclusion: str = None):
+    def __init__(self, model_path: str, data_set: DataSet, n: Any = 10, file_for_predicate_exclusion: str = None,
+                 is_print_confidences: bool = False):
         """Constructor
 
         Parameters
@@ -23,8 +28,8 @@ class Rdf2vecKbc:
             A path to the gensim model file. The file can also be a keyed vector file with ending ".kv".
         data_set : DataSet
             The dataset for which the prediction shall be performed.
-        n : int
-            The number of predictions to make for each triple.
+        n : Any
+            The number of predictions to make for each triple. If you want all predictions, set n to None.
         file_for_predicate_exclusion : str
             The RDF2Vec model learns embeddings for h,l,t but cannot differentiate between them afterwards. Hence,
             when doing predictions for h and t, it may also predict l. If the file used to train the embedding is given
@@ -42,7 +47,7 @@ class Rdf2vecKbc:
         self.n = n
         self.data_set = data_set
         self.test_set = self.data_set.test_set()
-
+        self.is_print_confidences = is_print_confidences
         self._predicates = set()
         if file_for_predicate_exclusion is not None and os.path.isfile(file_for_predicate_exclusion):
             self._predicates = self._read_predicates(file_for_predicate_exclusion)
@@ -68,7 +73,7 @@ class Rdf2vecKbc:
             return result_set
 
     @staticmethod
-    def remove_tags(string_to_process : str) -> str:
+    def remove_tags(string_to_process: str) -> str:
         """Removes tags around a string. Space-trimming is also applied.
 
         Parameters
@@ -99,17 +104,20 @@ class Rdf2vecKbc:
         """
         with open(file_to_write, "w+", encoding="utf8") as f:
             erroneous_triples = 0
-            for triple in self.test_set:
-                logging.info(f"Processing triple: {triple}")
-                if self._check_triple(triple):
-                    f.write(f"{triple[0]} {triple[1]} {triple[2]}\n")
-                    heads = self._predict_heads(triple)
-                    tails = self._predict_tails(triple)
-                    f.write(f"\tHeads: {' '.join(heads)}\n")
-                    f.write(f"\tTails: {' '.join(tails)}\n")
-                else:
-                    logging.error(f"Could not process the triple: {triple}")
-                    erroneous_triples += 1
+            print("Predicting Tails and Heads")
+            with tqdm(total=len(self.test_set), file=sys.stdout) as pbar:
+                for triple in self.test_set:
+                    logging.debug(f"Processing triple: {triple}")
+                    if self._check_triple(triple):
+                        f.write(f"{triple[0]} {triple[1]} {triple[2]}\n")
+                        heads = self._predict_heads(triple)
+                        tails = self._predict_tails(triple)
+                        f.write(f"\tHeads: {self._prediction_to_string(heads)}\n")
+                        f.write(f"\tTails: {self._prediction_to_string(tails)}\n")
+                    else:
+                        logging.error(f"Could not process the triple: {triple}")
+                        erroneous_triples += 1
+                    pbar.update(1)
 
             # logging output for the user
             if erroneous_triples == 0:
@@ -117,7 +125,36 @@ class Rdf2vecKbc:
             else:
                 logging.error("Erroneous Triples: " + str(erroneous_triples))
 
-    def _predict_heads(self, triple: List[str]) -> List[str]:
+    def _prediction_to_string(self, concepts_with_scores) -> str:
+        """Transform a prediction to a string.
+
+        Parameters
+        ----------
+        concepts_with_scores
+            The predicted concepts with scores in a list.
+
+        Returns
+        -------
+        str
+            String representation. Depending on the class configuration, confidences are added or not.
+        """
+        result = ""
+        is_first = True
+        for c, s in concepts_with_scores:
+            if is_first:
+                if self.is_print_confidences:
+                    result += c + f"_{{{s}}}"
+                else:
+                    result += c
+                is_first = False
+            else:
+                if self.is_print_confidences:
+                    result += f" {c}" + f"_{{{s}}}"
+                else:
+                    result += f" {c}"
+        return result
+
+    def _predict_heads(self, triple: List[str]) -> List:
         """Predicts n heads given a triple.
 
         Parameters
@@ -127,16 +164,26 @@ class Rdf2vecKbc:
 
         Returns
         -------
-        List[str]
-            A list of predicted concepts.
+        List
+            A list of predicted concepts with confidences.
         """
         result_with_confidence = self._vectors.most_similar(positive=list(triple[1:]), topn=self.n)
+        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if self.n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._vectors.index2word[i]
+                if word != triple[1] and word != triple[2]:
+                    # avoid predicting the inputs
+                    new_result_with_confidence.append((word, similarity))
+            result_with_confidence = sorted(new_result_with_confidence, key=lambda x: x[1], reverse=True)
         result_with_confidence = self._remove_predicates(result_with_confidence)
-        result = [i[0] for i in result_with_confidence]
-        return result
+        return result_with_confidence
 
-    def _predict_tails(self, triple: List[str]) -> List[str]:
-        """Predicts n tails given a triple
+    def _predict_tails(self, triple: List[str]) -> List:
+        """Predicts n tails given a triple.
 
         Parameters
         ----------
@@ -145,15 +192,37 @@ class Rdf2vecKbc:
 
         Returns
         -------
-        List[str]
-            A list of predicted concepts.
+        List
+            A list of predicted concepts with confidences.
         """
         result_with_confidence = self._vectors.most_similar(positive=list(triple[:2]), topn=self.n)
+        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if self.n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._vectors.index2word[i]
+                if word != triple[0] and word != triple[1]:
+                    # avoid predicting the inputs
+                    new_result_with_confidence.append((word, similarity))
+            result_with_confidence = sorted(new_result_with_confidence, key=lambda x: x[1], reverse=True)
         result_with_confidence = self._remove_predicates(result_with_confidence)
-        result = [i[0] for i in result_with_confidence]
-        return result
+        return result_with_confidence
 
     def _remove_predicates(self, list_to_process: List) -> List:
+        """From the result list, all predicates are removed and the new list is returned.
+
+        Parameters
+        ----------
+        list_to_process : List
+            List from which the predicates shall be removed.
+
+        Returns
+        -------
+        List
+            New list with removed predicates.
+        """
         result = []
         for entry in list_to_process:
             if not entry[0] in self._predicates:
@@ -184,6 +253,6 @@ class Rdf2vecKbc:
 
 
 if __name__ == "__main__":
-    kbc = Rdf2vecKbc(model_path="./wn_vectors/model.kv", n=5000, data_set=DataSet.WN18,
+    kbc = Rdf2vecKbc(model_path="./wn_vectors/model.kv", n=None, data_set=DataSet.WN18,
                      file_for_predicate_exclusion="./wordnet_kbc.nt")
     kbc.predict("./wn_evaluation_file_5000.txt")
