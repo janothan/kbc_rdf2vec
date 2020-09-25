@@ -152,3 +152,4 @@ wn_vectors
 test_prediction.txt
 wn_evaluation_file*
 fb15k_evaluation_file*
+server.py

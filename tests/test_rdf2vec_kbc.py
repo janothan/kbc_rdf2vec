@@ -4,81 +4,81 @@ from kbc_rdf2vec.dataset import DataSet
 from kbc_rdf2vec.rdf2vec_kbc import Rdf2vecKbc
 
 
-def test_remove_tags():
-    print(Rdf2vecKbc.remove_tags("<hello>"))
-    assert Rdf2vecKbc.remove_tags("<hello>") == "hello"
-    assert Rdf2vecKbc.remove_tags(" <hello>  ") == "hello"
+class TestRdf2vecKbc:
 
+    def test_remove_tags(self):
+        print(Rdf2vecKbc.remove_tags("<hello>"))
+        assert Rdf2vecKbc.remove_tags("<hello>") == "hello"
+        assert Rdf2vecKbc.remove_tags(" <hello>  ") == "hello"
 
-def test_predict():
-    # with n = 10
-    test_file_path = "./tests/test_resources/wn_test_model.kv"
-    if not os.path.isfile(test_file_path):
-        os.chdir("./..")
-    kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=False)
-    file_to_write = "./test_prediction.txt"
-    kbc.predict(file_to_write=file_to_write)
-    assert os.path.isfile(file_to_write)
-    with open(file_to_write, "r", encoding="utf8") as f:
-        n_10_content = f.read()
-        assert n_10_content.count("_member_meronym") > 0
-        assert n_10_content.count("_{0") == 0
-    os.remove(file_to_write)
+    def test_predict(self):
+        # with n = 10
+        test_file_path = "./tests/test_resources/wn_test_model.kv"
+        if not os.path.isfile(test_file_path):
+            os.chdir("./..")
+        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=False)
+        file_to_write = "./test_prediction.txt"
+        kbc.predict(file_to_write=file_to_write)
+        assert os.path.isfile(file_to_write)
+        with open(file_to_write, "r", encoding="utf8") as f:
+            n_10_content = f.read()
+            assert n_10_content.count("_member_meronym") > 0
+            assert n_10_content.count("_{0") == 0
+        os.remove(file_to_write)
 
-    # with n = None
-    kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=False)
-    kbc.predict(file_to_write=file_to_write)
-    assert os.path.isfile(file_to_write)
-    with open(file_to_write, "r", encoding="utf8") as f:
-        n_none_content = f.read()
-        assert n_none_content.count("_member_meronym") > 0
-        assert n_10_content.count("_{0") == 0
+        # with n = None
+        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=False)
+        kbc.predict(file_to_write=file_to_write)
+        assert os.path.isfile(file_to_write)
+        with open(file_to_write, "r", encoding="utf8") as f:
+            n_none_content = f.read()
+            assert n_none_content.count("_member_meronym") > 0
+            assert n_10_content.count("_{0") == 0
 
+    def test_with_confidence_printing(self):
+        # with n = 10
+        test_file_path = "./tests/test_resources/wn_test_model.kv"
+        if not os.path.isfile(test_file_path):
+            os.chdir("./..")
+        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=True)
+        file_to_write = "./test_prediction.txt"
+        kbc.predict(file_to_write=file_to_write)
+        assert os.path.isfile(file_to_write)
+        with open(file_to_write, "r", encoding="utf8") as f:
+            n_10_content = f.read()
+            assert n_10_content.count("_member_meronym") > 0
+            assert n_10_content.count("_{0") > 10
+        os.remove(file_to_write)
 
-def test_with_confidence_printing():
-    # with n = 10
-    test_file_path = "./tests/test_resources/wn_test_model.kv"
-    if not os.path.isfile(test_file_path):
-        os.chdir("./..")
-    kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=True)
-    file_to_write = "./test_prediction.txt"
-    kbc.predict(file_to_write=file_to_write)
-    assert os.path.isfile(file_to_write)
-    with open(file_to_write, "r", encoding="utf8") as f:
-        n_10_content = f.read()
-        assert n_10_content.count("_member_meronym") > 0
-        assert n_10_content.count("_{0") > 10
-    os.remove(file_to_write)
+        # with n = None
+        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=True)
+        kbc.predict(file_to_write=file_to_write)
+        assert os.path.isfile(file_to_write)
+        with open(file_to_write, "r", encoding="utf8") as f:
+            n_none_content = f.read()
+            assert n_none_content.count("_member_meronym") > 0
+            assert n_10_content.count("_{0") > 10
 
-    # with n = None
-    kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=True)
-    kbc.predict(file_to_write=file_to_write)
-    assert os.path.isfile(file_to_write)
-    with open(file_to_write, "r", encoding="utf8") as f:
-        n_none_content = f.read()
-        assert n_none_content.count("_member_meronym") > 0
-        assert n_10_content.count("_{0") > 10
-
-
-def test_predict_with_relation_filter():
-    """Tests whether relations are excluded from proposals.
-    """
-    model_file_path = "./tests/test_resources/wn_test_model.kv"
-    nt_file_path = "./tests/test_resources/wn_test.nt"
-    if not os.path.isfile(model_file_path):
-        os.chdir("./..")
-    kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=model_file_path, file_for_predicate_exclusion=nt_file_path)
-    file_to_write = "./test_prediction.txt"
-    kbc.predict(file_to_write=file_to_write)
-    assert os.path.isfile(file_to_write)
-    with open(file_to_write, "r", encoding="utf8") as f:
-        content = f.read()
-        assert content.count("_member_meronym") == 0
-    os.remove(file_to_write)
+    def test_predict_with_relation_filter(self):
+        """Tests whether relations are excluded from proposals.
+        """
+        model_file_path = "./tests/test_resources/wn_test_model.kv"
+        nt_file_path = "./tests/test_resources/wn_test.nt"
+        if not os.path.isfile(model_file_path):
+            os.chdir("./..")
+        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=model_file_path, file_for_predicate_exclusion=nt_file_path)
+        file_to_write = "./test_prediction.txt"
+        kbc.predict(file_to_write=file_to_write)
+        assert os.path.isfile(file_to_write)
+        with open(file_to_write, "r", encoding="utf8") as f:
+            content = f.read()
+            assert content.count("_member_meronym") == 0
+        os.remove(file_to_write)
 
 
 if __name__ == "__main__":
-    test_remove_tags()
-    test_predict()
-    test_predict_with_relation_filter()
-    test_with_confidence_printing()
+    t = TestRdf2vecKbc()
+    t.test_remove_tags()
+    t.test_predict()
+    t.test_predict_with_relation_filter()
+    t.test_with_confidence_printing()
