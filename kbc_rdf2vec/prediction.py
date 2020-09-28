@@ -57,7 +57,7 @@ class RandomPredictionFunction(PredictionFunctionInterface):
             n = vocab_size
         result_indices = set()
         while len(result_indices) < n:
-            result_indices.add(randint(0, vocab_size))
+            result_indices.add(randint(0, vocab_size - 1))
         result = []
         for index in result_indices:
             result.append((self._keyed_vectors.index2word[index], random()))
