@@ -10,12 +10,16 @@ class DataSet(Enum):
     [2]: relative validation set path
     """
 
-    FB15K = "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-test.txt", \
-            "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-train.txt", \
-            "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-valid.txt"
-    WN18 = "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-test.txt", \
-           "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-train.txt", \
-           "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-valid.txt"
+    FB15K = (
+        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-test.txt",
+        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-train.txt",
+        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-valid.txt",
+    )
+    WN18 = (
+        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-test.txt",
+        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-train.txt",
+        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-valid.txt",
+    )
 
     def test_set(self) -> List[List[str]]:
         """Get the parsed test dataset.
@@ -62,7 +66,7 @@ class DataSet(Enum):
             List of triples.
         """
         result = []
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.replace("\n", "")
                 tokens = line.split(sep="\t")
@@ -101,7 +105,7 @@ class DataSet(Enum):
 
     @staticmethod
     def write_training_file_nt(data_set, file_to_write: str) -> None:
-        """ File in NT format that can be parsed by jRDF2Vec (https://github.com/dwslab/jRDF2Vec).
+        """File in NT format that can be parsed by jRDF2Vec (https://github.com/dwslab/jRDF2Vec).
 
         Parameters
         ----------
@@ -111,11 +115,13 @@ class DataSet(Enum):
             The file that shall be written.
         """
 
-        with io.open(file_to_write, 'w+', encoding='utf8') as f:
+        with io.open(file_to_write, "w+", encoding="utf8") as f:
             data_to_write = data_set.train_set()
             data_to_write.extend(data_set.valid_set())
             for triple in data_to_write:
-                f.write("<" + triple[0] + "> <" + triple[1] + "> <" + triple[2] + "> .\n")
+                f.write(
+                    "<" + triple[0] + "> <" + triple[1] + "> <" + triple[2] + "> .\n"
+                )
 
 
 if __name__ == "__main__":

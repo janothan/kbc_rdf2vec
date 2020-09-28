@@ -3,7 +3,6 @@ import os.path
 
 
 class TestDataSet:
-
     def test_files_exist(self):
         """The following is tested
         - Existence of test/valid/train files for every data set in enum DataSet
@@ -20,8 +19,7 @@ class TestDataSet:
             assert os.path.isfile(train_path)
 
     def test_write_training_file_nt(self):
-        """Only makes sure that a file is written.
-        """
+        """Only makes sure that a file is written."""
         for i in DataSet:
             file_to_write = f"./{i}_test_file.nt"
             DataSet.write_training_file_nt(data_set=i, file_to_write=file_to_write)
@@ -45,10 +43,16 @@ class TestDataSet:
             valid_data = data_set.valid_set()
             self._assert_triples_not_none(valid_data)
             # making sure that different files were read:
-            assert test_data[0][0] != train_data[0][0] or test_data[0][1] != train_data[0][1] \
-                   or test_data[0][2] != train_data[0][2]
-            assert train_data[0][0] != valid_data[0][0] or train_data[0][1] != valid_data[0][1] \
-                   or train_data[0][2] != valid_data[0][2]
+            assert (
+                test_data[0][0] != train_data[0][0]
+                or test_data[0][1] != train_data[0][1]
+                or test_data[0][2] != train_data[0][2]
+            )
+            assert (
+                train_data[0][0] != valid_data[0][0]
+                or train_data[0][1] != valid_data[0][1]
+                or train_data[0][2] != valid_data[0][2]
+            )
 
     @staticmethod
     def _assert_triples_not_none(parsed_triples):
@@ -64,4 +68,3 @@ class TestDataSet:
         assert parsed_triples[0][0] is not None
         assert parsed_triples[0][1] is not None
         assert parsed_triples[0][2] is not None
-

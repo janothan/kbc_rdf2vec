@@ -14,17 +14,24 @@ from kbc_rdf2vec.prediction import PredictionFunction
 
 
 # noinspection PyArgumentList
-logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8')],
-                    format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
+logging.basicConfig(
+    handlers=[logging.FileHandler(__file__ + ".log", "w", "utf-8")],
+    format="%(asctime)s %(levelname)s:%(message)s",
+    level=logging.DEBUG,
+)
 # add ", logging.StreamHandler()" to the handlers if debug output is desired in the console
 
 
 class Rdf2vecKbc:
-
-    def __init__(self, model_path: str, data_set: DataSet, n: Any = 10,
-                 prediction_function: PredictionFunction = PredictionFunction.MOST_SIMILAR,
-                 file_for_predicate_exclusion: str = None,
-                 is_print_confidences: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        data_set: DataSet,
+        n: Any = 10,
+        prediction_function: PredictionFunction = PredictionFunction.MOST_SIMILAR,
+        file_for_predicate_exclusion: str = None,
+        is_print_confidences: bool = False,
+    ):
         """Constructor
 
         Parameters
@@ -41,11 +48,13 @@ class Rdf2vecKbc:
             here, such relations will be removed from the proposal set.
         """
         if not os.path.isfile(model_path):
-            logging.error(f"Cannot find file: {model_path}\nCurrent working directory: {os.getcwd()}")
+            logging.error(
+                f"Cannot find file: {model_path}\nCurrent working directory: {os.getcwd()}"
+            )
 
         if model_path.endswith(".kv"):
             print("Gensim vector file detected.")
-            self._vectors = KeyedVectors.load(model_path, mmap='r')
+            self._vectors = KeyedVectors.load(model_path, mmap="r")
         else:
             self._vectors = gensim.models.Word2Vec.load(model_path).wv
 
@@ -54,9 +63,13 @@ class Rdf2vecKbc:
         self.test_set = self.data_set.test_set()
         self.is_print_confidences = is_print_confidences
         self._predicates = set()
-        if file_for_predicate_exclusion is not None and os.path.isfile(file_for_predicate_exclusion):
+        if file_for_predicate_exclusion is not None and os.path.isfile(
+            file_for_predicate_exclusion
+        ):
             self._predicates = self._read_predicates(file_for_predicate_exclusion)
-        self._prediction_function = prediction_function.get_instance(self._vectors)
+        self._prediction_function = prediction_function.get_instance(
+            keyed_vectors=self._vectors, data_set=self.data_set
+        )
 
     def _read_predicates(self, file_for_predicate_exclusion) -> set:
         """Obtain predicates from the given nt file.
@@ -97,7 +110,7 @@ class Rdf2vecKbc:
         if string_to_process.startswith("<"):
             string_to_process = string_to_process[1:]
         if string_to_process.endswith(">"):
-            string_to_process = string_to_process[:len(string_to_process)-1]
+            string_to_process = string_to_process[: len(string_to_process) - 1]
         return string_to_process
 
     def predict(self, file_to_write: str):
@@ -234,9 +247,3 @@ class Rdf2vecKbc:
             return True
         except KeyError:
             return False
-
-
-if __name__ == "__main__":
-    kbc = Rdf2vecKbc(model_path="./wn_vectors/model.kv", n=None, data_set=DataSet.WN18,
-                     file_for_predicate_exclusion="./wordnet_kbc.nt")
-    kbc.predict("./wn_evaluation_file_5000.txt")

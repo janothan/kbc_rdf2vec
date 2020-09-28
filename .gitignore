@@ -155,3 +155,7 @@ fb15k_evaluation_file*
 server.py
 tests/test_resources/mini_3d_wn_model
 tests/test_resources/mini_3d_wn_model.kv
+run.py
+/fb15k_vectors
+wn_random.txt
+fb15k_random.txt

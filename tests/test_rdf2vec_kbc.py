@@ -5,7 +5,6 @@ from kbc_rdf2vec.rdf2vec_kbc import Rdf2vecKbc
 
 
 class TestRdf2vecKbc:
-
     def test_remove_tags(self):
         print(Rdf2vecKbc.remove_tags("<hello>"))
         assert Rdf2vecKbc.remove_tags("<hello>") == "hello"
@@ -16,7 +15,12 @@ class TestRdf2vecKbc:
         test_file_path = "./tests/test_resources/wn_test_model.kv"
         if not os.path.isfile(test_file_path):
             os.chdir("./..")
-        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=False)
+        kbc = Rdf2vecKbc(
+            data_set=DataSet.WN18,
+            model_path=test_file_path,
+            n=10,
+            is_print_confidences=False,
+        )
         file_to_write = "./test_prediction.txt"
         kbc.predict(file_to_write=file_to_write)
         assert os.path.isfile(file_to_write)
@@ -27,7 +31,12 @@ class TestRdf2vecKbc:
         os.remove(file_to_write)
 
         # with n = None
-        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=False)
+        kbc = Rdf2vecKbc(
+            data_set=DataSet.WN18,
+            model_path=test_file_path,
+            n=None,
+            is_print_confidences=False,
+        )
         kbc.predict(file_to_write=file_to_write)
         assert os.path.isfile(file_to_write)
         with open(file_to_write, "r", encoding="utf8") as f:
@@ -40,7 +49,12 @@ class TestRdf2vecKbc:
         test_file_path = "./tests/test_resources/wn_test_model.kv"
         if not os.path.isfile(test_file_path):
             os.chdir("./..")
-        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=10, is_print_confidences=True)
+        kbc = Rdf2vecKbc(
+            data_set=DataSet.WN18,
+            model_path=test_file_path,
+            n=10,
+            is_print_confidences=True,
+        )
         file_to_write = "./test_prediction.txt"
         kbc.predict(file_to_write=file_to_write)
         assert os.path.isfile(file_to_write)
@@ -51,7 +65,12 @@ class TestRdf2vecKbc:
         os.remove(file_to_write)
 
         # with n = None
-        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=test_file_path, n=None, is_print_confidences=True)
+        kbc = Rdf2vecKbc(
+            data_set=DataSet.WN18,
+            model_path=test_file_path,
+            n=None,
+            is_print_confidences=True,
+        )
         kbc.predict(file_to_write=file_to_write)
         assert os.path.isfile(file_to_write)
         with open(file_to_write, "r", encoding="utf8") as f:
@@ -60,13 +79,16 @@ class TestRdf2vecKbc:
             assert n_10_content.count("_{0") > 10
 
     def test_predict_with_relation_filter(self):
-        """Tests whether relations are excluded from proposals.
-        """
+        """Tests whether relations are excluded from proposals."""
         model_file_path = "./tests/test_resources/wn_test_model.kv"
         nt_file_path = "./tests/test_resources/wn_test.nt"
         if not os.path.isfile(model_file_path):
             os.chdir("./..")
-        kbc = Rdf2vecKbc(data_set=DataSet.WN18, model_path=model_file_path, file_for_predicate_exclusion=nt_file_path)
+        kbc = Rdf2vecKbc(
+            data_set=DataSet.WN18,
+            model_path=model_file_path,
+            file_for_predicate_exclusion=nt_file_path,
+        )
         file_to_write = "./test_prediction.txt"
         kbc.predict(file_to_write=file_to_write)
         assert os.path.isfile(file_to_write)
