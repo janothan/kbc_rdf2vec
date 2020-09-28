@@ -74,11 +74,3 @@ class TestRdf2vecKbc:
             content = f.read()
             assert content.count("_member_meronym") == 0
         os.remove(file_to_write)
-
-
-if __name__ == "__main__":
-    t = TestRdf2vecKbc()
-    t.test_remove_tags()
-    t.test_predict()
-    t.test_predict_with_relation_filter()
-    t.test_with_confidence_printing()

@@ -4,11 +4,14 @@ import sys
 import gensim
 import logging
 from gensim.models import KeyedVectors
-from typing import List, Any
+from typing import List, Any, Tuple
 
 from tqdm import tqdm
 
 from kbc_rdf2vec.dataset import DataSet
+
+from kbc_rdf2vec.prediction import PredictionFunction
+
 
 # noinspection PyArgumentList
 logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8')],
@@ -18,7 +21,9 @@ logging.basicConfig(handlers=[logging.FileHandler(__file__ + '.log', 'w', 'utf-8
 
 class Rdf2vecKbc:
 
-    def __init__(self, model_path: str, data_set: DataSet, n: Any = 10, file_for_predicate_exclusion: str = None,
+    def __init__(self, model_path: str, data_set: DataSet, n: Any = 10,
+                 prediction_function: PredictionFunction = PredictionFunction.MOST_SIMILAR,
+                 file_for_predicate_exclusion: str = None,
                  is_print_confidences: bool = False):
         """Constructor
 
@@ -51,6 +56,7 @@ class Rdf2vecKbc:
         self._predicates = set()
         if file_for_predicate_exclusion is not None and os.path.isfile(file_for_predicate_exclusion):
             self._predicates = self._read_predicates(file_for_predicate_exclusion)
+        self._prediction_function = prediction_function.get_instance(self._vectors)
 
     def _read_predicates(self, file_for_predicate_exclusion) -> set:
         """Obtain predicates from the given nt file.
@@ -167,18 +173,7 @@ class Rdf2vecKbc:
         List
             A list of predicted concepts with confidences.
         """
-        result_with_confidence = self._vectors.most_similar(positive=list(triple[1:]), topn=self.n)
-        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
-        # mapped manually.
-        if self.n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._vectors.index2word[i]
-                if word != triple[1] and word != triple[2]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(new_result_with_confidence, key=lambda x: x[1], reverse=True)
+        result_with_confidence = self._prediction_function.predict_heads(triple, self.n)
         result_with_confidence = self._remove_predicates(result_with_confidence)
         return result_with_confidence
 
@@ -195,22 +190,11 @@ class Rdf2vecKbc:
         List
             A list of predicted concepts with confidences.
         """
-        result_with_confidence = self._vectors.most_similar(positive=list(triple[:2]), topn=self.n)
-        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
-        # mapped manually.
-        if self.n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._vectors.index2word[i]
-                if word != triple[0] and word != triple[1]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(new_result_with_confidence, key=lambda x: x[1], reverse=True)
+        result_with_confidence = self._prediction_function.predict_tails(triple, self.n)
         result_with_confidence = self._remove_predicates(result_with_confidence)
         return result_with_confidence
 
-    def _remove_predicates(self, list_to_process: List) -> List:
+    def _remove_predicates(self, list_to_process: List) -> List[Tuple[str, float]]:
         """From the result list, all predicates are removed and the new list is returned.
 
         Parameters

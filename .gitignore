@@ -153,3 +153,5 @@ test_prediction.txt
 wn_evaluation_file*
 fb15k_evaluation_file*
 server.py
+tests/test_resources/mini_3d_wn_model
+tests/test_resources/mini_3d_wn_model.kv
