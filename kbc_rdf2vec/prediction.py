@@ -162,7 +162,7 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
 
         p_to_so = {}
         for triple in all_triples:
-            if p_to_so[triple[1]] is None:
+            if triple[1] not in p_to_so:
                 p_to_so[triple[1]] = {triple[0], triple[2]}
             else:
                 p_to_so[triple[1]].add(triple[0])
