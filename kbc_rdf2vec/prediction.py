@@ -1,8 +1,9 @@
 import logging
 from enum import Enum
 from random import randint, random
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
+import numpy as np
 from gensim.models import KeyedVectors
 
 from kbc_rdf2vec.dataset import DataSet
@@ -22,10 +23,10 @@ class PredictionFunctionInterface:
         self._keyed_vectors = keyed_vectors
         self._data_set = data_set
 
-    def predict_heads(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         pass
 
-    def predict_tails(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         pass
 
 
@@ -34,6 +35,7 @@ class PredictionFunction(Enum):
 
     MOST_SIMILAR = "most_similar"
     RANDOM = "random"
+    PREDICATE_AVERAGING = "predicate_averaging"
 
     def get_instance(
         self, keyed_vectors, data_set: DataSet
@@ -60,12 +62,16 @@ class PredictionFunction(Enum):
             return RandomPredictionFunction(
                 keyed_vectors=keyed_vectors, data_set=data_set
             )
+        if self.value == "predicate_averaging":
+            return AveragePredicatePredictionFunction(
+                keyed_vectors=keyed_vectors, data_set=data_set
+            )
 
 
 class RandomPredictionFunction(PredictionFunctionInterface):
     """This class randomly picks results for h and t."""
 
-    def predict_heads(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         vocab_size = len(self._keyed_vectors.vocab)
         if n is None:
             n = vocab_size
@@ -89,15 +95,15 @@ class RandomPredictionFunction(PredictionFunctionInterface):
 
         return result
 
-    def predict_tails(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         """In the random case, there is no difference between predict_heads and predict_tails.
 
         Parameters
         ----------
         triple: List[str]
             Triple for which the tails shall be predicted.
-        n: int
-            Number of prediction to make.
+        n: Any
+            Number of predictions to make. Set to None to obtain all possible predictions.
 
         Returns
         -------
@@ -112,11 +118,11 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
     h.
     """
 
-    def predict_heads(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         result_with_confidence = self._keyed_vectors.most_similar(
             positive=list(triple[1:]), topn=n
         )
-        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
         # mapped manually.
         if n is None:
             new_result_with_confidence = []
@@ -135,7 +141,7 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
         result_with_confidence = self._keyed_vectors.most_similar(
             positive=list(triple[:2]), topn=n
         )
-        # important: if self.n is none, the result type of the most_similar action is a numpy array that needs to be
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
         # mapped manually.
         if n is None:
             new_result_with_confidence = []
@@ -152,6 +158,10 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
 
 
 class AveragePredicatePredictionFunction(PredictionFunctionInterface):
+    """Prediction function where predicate embeddings are not taken as is but instead given multiple triples <H,L,T>,
+    The vector T-H for each triple containing L is averaged to obtain a new vector for L.
+    """
+
     def __init__(self, keyed_vectors: KeyedVectors, data_set: DataSet):
         super().__init__(keyed_vectors=keyed_vectors, data_set=data_set)
 
@@ -163,7 +173,85 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
         p_to_so = {}
         for triple in all_triples:
             if triple[1] not in p_to_so:
-                p_to_so[triple[1]] = {triple[0], triple[2]}
+                p_to_so[triple[1]] = {(triple[0], triple[2])}
             else:
-                p_to_so[triple[1]].add(triple[0])
-                p_to_so[triple[1]].add(triple[1])
+                p_to_so[triple[1]].add((triple[0], triple[1]))
+
+        self.p_to_mean = {}
+        for p, so in p_to_so.items():
+            delta_vectors = []
+            for s, o in so:
+                s_vector = self._keyed_vectors.get_vector(s)
+                o_vector = self._keyed_vectors.get_vector(o)
+                so_delta = o_vector - s_vector
+                delta_vectors.append(so_delta)
+            mean_vector = np.mean(delta_vectors, axis=0)
+            self.p_to_mean[p] = mean_vector
+
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        result = []
+        try:
+            h_vector = self._keyed_vectors.get_vector(triple[0])
+        except KeyError:
+            logging.error(f"Could not find the head {triple[0]} in the vector space.")
+            return result
+        try:
+            l_vector = self.p_to_mean[triple[1]]
+        except KeyError:
+            logging.error(
+                f"Could not find the predicate {triple[1]} in the averaged vector space."
+            )
+            return result
+        lookup_vector = h_vector + l_vector
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector], topn=n
+        )
+
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._keyed_vectors.index2word[i]
+                if word != triple[0] and word != triple[1]:
+                    # avoid predicting the inputs
+                    new_result_with_confidence.append((word, similarity))
+            result_with_confidence = sorted(
+                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            )
+        return result_with_confidence
+
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        result = []
+        try:
+            t_vector = self._keyed_vectors.get_vector(triple[2])
+        except KeyError:
+            logging.error(f"Could not find the head {triple[2]} in the vector space.")
+            return result
+        try:
+            l_vector = self.p_to_mean[triple[1]]
+        except KeyError:
+            logging.error(
+                f"Could not find the predicate {triple[1]} in the averaged vector space."
+            )
+            return result
+        lookup_vector = t_vector + l_vector
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector], topn=n
+        )
+
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._keyed_vectors.index2word[i]
+                if word != triple[1] and word != triple[2]:
+                    # avoid predicting the inputs
+                    new_result_with_confidence.append((word, similarity))
+            result_with_confidence = sorted(
+                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            )
+        return result_with_confidence

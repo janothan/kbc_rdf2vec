@@ -159,3 +159,4 @@ run.py
 /fb15k_vectors
 wn_random.txt
 fb15k_random.txt
+wn_predicate_averaging.txt
