@@ -11,9 +11,10 @@ from kbc_rdf2vec.prediction import (
 
 class TestPredictionFunction:
     def test_get_instance(self):
+        kv = KeyedVectors.load("./tests/test_resources/mini_3d_wn_model.kv", mmap="r")
         for function in PredictionFunction:
             assert (
-                function.get_instance(keyed_vectors=None, data_set=DataSet.WN18)
+                function.get_instance(keyed_vectors=kv, data_set=DataSet.WN18)
                 is not None
             )
 
