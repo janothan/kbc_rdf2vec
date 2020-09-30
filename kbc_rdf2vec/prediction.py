@@ -198,6 +198,19 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
             self.p_to_mean[p] = mean_vector
 
     def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        """Predictions are made using most_similar(H+L) where L is an averaged vector.
+
+        Parameters
+        ----------
+        triple : List[str]
+            The triple for which the prediction shall be made.
+        n : Any
+            None if the maximal number of predictions shall be made, else some upper boundary >= 1.
+
+        Returns
+        -------
+        List[Tuple[str, float]
+        """
         result = []
         try:
             h_vector = self._keyed_vectors.get_vector(triple[0])
@@ -232,6 +245,19 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
         return result_with_confidence
 
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        """Predictions are made using most_similar(T-L) where L is an averaged vector.
+
+        Parameters
+        ----------
+        triple : List[str]
+            The triple for which the prediction shall be made.
+        n : Any
+            None if the maximal number of predictions shall be made, else some upper boundary >= 1.
+
+        Returns
+        -------
+        List[Tuple[str, float]]
+        """
         result = []
         try:
             t_vector = self._keyed_vectors.get_vector(triple[2])
@@ -245,7 +271,7 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
                 f"Could not find the predicate {triple[1]} in the averaged vector space."
             )
             return result
-        lookup_vector = t_vector + l_vector
+        lookup_vector = t_vector - l_vector
         result_with_confidence = self._keyed_vectors.most_similar(
             positive=[lookup_vector], topn=n
         )
