@@ -2,14 +2,11 @@ import os
 import sys
 
 import gensim
-import logging
+import logging.config
 from gensim.models import KeyedVectors
 from typing import List, Any, Tuple
-
 from tqdm import tqdm
-
 from kbc_rdf2vec.dataset import DataSet
-
 from kbc_rdf2vec.prediction import PredictionFunction
 
 
@@ -121,7 +118,7 @@ class Rdf2vecKbc:
             print("Predicting Tails and Heads")
             with tqdm(total=len(self.test_set), file=sys.stdout) as pbar:
                 for triple in self.test_set:
-                    logging.debug(f"Processing triple: {triple}")
+                    logger.debug(f"Processing triple: {triple}")
                     if self._check_triple(triple):
                         f.write(f"{triple[0]} {triple[1]} {triple[2]}\n")
                         heads = self._predict_heads(triple)
@@ -129,15 +126,15 @@ class Rdf2vecKbc:
                         f.write(f"\tHeads: {self._prediction_to_string(heads)}\n")
                         f.write(f"\tTails: {self._prediction_to_string(tails)}\n")
                     else:
-                        logging.error(f"Could not process the triple: {triple}")
+                        logger.error(f"Could not process the triple: {triple}")
                         erroneous_triples += 1
                     pbar.update(1)
 
             # logging output for the user
             if erroneous_triples == 0:
-                logging.info("Erroneous Triples: " + str(erroneous_triples))
+                logger.info("Erroneous Triples: " + str(erroneous_triples))
             else:
-                logging.error("Erroneous Triples: " + str(erroneous_triples))
+                logger.error("Erroneous Triples: " + str(erroneous_triples))
 
     def _prediction_to_string(self, concepts_with_scores) -> str:
         """Transform a prediction to a string.

@@ -1,4 +1,3 @@
-import logging
 from enum import Enum
 from random import randint, random
 from typing import List, Tuple, Any
@@ -73,7 +72,7 @@ class RandomPredictionFunction(PredictionFunctionInterface):
         if n is None:
             n = vocab_size
         if n > vocab_size:
-            logging.error(
+            logger.error(
                 f"n ({n}) > vocab_size ({vocab_size})! Predicting only {vocab_size} concepts."
             )
             n = vocab_size
@@ -203,12 +202,12 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
         try:
             h_vector = self._keyed_vectors.get_vector(triple[0])
         except KeyError:
-            logging.error(f"Could not find the head {triple[0]} in the vector space.")
+            logger.error(f"Could not find the head {triple[0]} in the vector space.")
             return result
         try:
             l_vector = self.p_to_mean[triple[1]]
         except KeyError:
-            logging.error(
+            logger.error(
                 f"Could not find the predicate {triple[1]} in the averaged vector space."
             )
             return result
@@ -237,12 +236,12 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
         try:
             t_vector = self._keyed_vectors.get_vector(triple[2])
         except KeyError:
-            logging.error(f"Could not find the head {triple[2]} in the vector space.")
+            logger.error(f"Could not find the head {triple[2]} in the vector space.")
             return result
         try:
             l_vector = self.p_to_mean[triple[1]]
         except KeyError:
-            logging.error(
+            logger.error(
                 f"Could not find the predicate {triple[1]} in the averaged vector space."
             )
             return result
