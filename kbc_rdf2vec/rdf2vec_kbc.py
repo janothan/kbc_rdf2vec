@@ -13,13 +13,8 @@ from kbc_rdf2vec.dataset import DataSet
 from kbc_rdf2vec.prediction import PredictionFunction
 
 
-# noinspection PyArgumentList
-logging.basicConfig(
-    handlers=[logging.FileHandler(__file__ + ".log", "w", "utf-8")],
-    format="%(asctime)s %(levelname)s:%(message)s",
-    level=logging.DEBUG,
-)
-# add ", logging.StreamHandler()" to the handlers if debug output is desired in the console
+logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
 
 
 class Rdf2vecKbc:
@@ -48,12 +43,12 @@ class Rdf2vecKbc:
             here, such relations will be removed from the proposal set.
         """
         if not os.path.isfile(model_path):
-            logging.error(
+            logger.error(
                 f"Cannot find file: {model_path}\nCurrent working directory: {os.getcwd()}"
             )
 
         if model_path.endswith(".kv"):
-            print("Gensim vector file detected.")
+            logger.info("Gensim vector file detected.")
             self._vectors = KeyedVectors.load(model_path, mmap="r")
         else:
             self._vectors = gensim.models.Word2Vec.load(model_path).wv

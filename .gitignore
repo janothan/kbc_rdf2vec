@@ -158,3 +158,4 @@ run.py
 wn_random.txt
 fb15k_random.txt
 wn_predicate_averaging.txt
+wn_predicate_averaging_with_pprediction.txt

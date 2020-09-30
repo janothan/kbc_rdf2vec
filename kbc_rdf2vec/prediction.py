@@ -2,18 +2,15 @@ import logging
 from enum import Enum
 from random import randint, random
 from typing import List, Tuple, Any
-
+import logging.config
 import numpy as np
 from gensim.models import KeyedVectors
 
 from kbc_rdf2vec.dataset import DataSet
 
-# noinspection PyArgumentList
-logging.basicConfig(
-    handlers=[logging.FileHandler(__file__ + ".log", "w", "utf-8")],
-    format="%(asctime)s %(levelname)s:%(message)s",
-    level=logging.DEBUG,
-)
+
+logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
 
 
 class PredictionFunctionInterface:
@@ -163,6 +160,7 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
     """
 
     def __init__(self, keyed_vectors: KeyedVectors, data_set: DataSet):
+        logger.info("Initializing AveragePredicatePredictionFunction")
         super().__init__(keyed_vectors=keyed_vectors, data_set=data_set)
 
         # now we build a dictionary from predicate to (subject, object)
@@ -181,8 +179,20 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
         for p, so in p_to_so.items():
             delta_vectors = []
             for s, o in so:
-                s_vector = self._keyed_vectors.get_vector(s)
-                o_vector = self._keyed_vectors.get_vector(o)
+                try:
+                    s_vector = self._keyed_vectors.get_vector(s)
+                except KeyError:
+                    logger.error(
+                        f"Could not find S/H concept {s} in the embedding space."
+                    )
+                    continue
+                try:
+                    o_vector = self._keyed_vectors.get_vector(o)
+                except KeyError:
+                    logger.error(
+                        f"Could not find O/T concept {o} in the embedding space."
+                    )
+                    continue
                 so_delta = o_vector - s_vector
                 delta_vectors.append(so_delta)
             mean_vector = np.mean(delta_vectors, axis=0)
