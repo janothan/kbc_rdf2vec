@@ -15,9 +15,26 @@ logger = logging.getLogger(__name__)
 class PredictionFunctionInterface:
     """Interface for prediction functions."""
 
-    def __init__(self, keyed_vectors: KeyedVectors, data_set: DataSet):
+    def __init__(
+        self,
+        keyed_vectors: KeyedVectors,
+        data_set: DataSet,
+        is_reflexive_match_allowed: bool = False,
+    ):
+        """Constructor
+
+        Parameters
+        ----------
+        keyed_vectors : KeyedVectors
+            The keyed vector instance to be used to make predictions.
+        data_set : DataSet
+            The data set for which predictions shall be made.
+        is_reflexive_match_allowed : bool
+            True if it is allowed to predict H in a <H, L, ?> task and T in a <?, L, T> task.
+        """
         self._keyed_vectors = keyed_vectors
         self._data_set = data_set
+        self._is_reflexive_match_allowed = is_reflexive_match_allowed
 
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         pass
@@ -30,12 +47,16 @@ class PredictionFunction(Enum):
     """An enumeration with the implemented similarity functions."""
 
     MOST_SIMILAR = "most_similar"
+    ADDITION = "addition"
     RANDOM = "random"
-    PREDICATE_AVERAGING = "predicate_averaging"
+    PREDICATE_AVERAGING_ADDITION = "predicate_averaging_addition"
     PREDICATE_AVERAGING_MOST_SIMILAR = "predicate_averaging_most_similar"
 
     def get_instance(
-        self, keyed_vectors, data_set: DataSet
+        self,
+        keyed_vectors: KeyedVectors,
+        data_set: DataSet,
+        is_reflexive_match_allowed: bool = False,
     ) -> PredictionFunctionInterface:
         """Obtain the accompanying instance.
 
@@ -45,6 +66,8 @@ class PredictionFunction(Enum):
             The dataset to be evaluated.
         keyed_vectors
             Keyed vectors instance for which the similarity shall be applied.
+        is_reflexive_match_allowed : bool
+            True if it is allowed to predict H in a <H, L, ?> task and T in a <?, L, T> task.
 
         Returns
         -------
@@ -53,19 +76,33 @@ class PredictionFunction(Enum):
         """
         if self.value == "most_similar":
             return MostSimilarPredictionFunction(
-                keyed_vectors=keyed_vectors, data_set=data_set
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
             )
         if self.value == "random":
             return RandomPredictionFunction(
-                keyed_vectors=keyed_vectors, data_set=data_set
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
             )
-        if self.value == "predicate_averaging":
-            return AveragePredicatePredictionFunction(
-                keyed_vectors=keyed_vectors, data_set=data_set
+        if self.value == "predicate_averaging_addition":
+            return AveragePredicateAdditionPredictionFunction(
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
             )
         if self.value == "predicate_averaging_most_similar":
-            return AveragePredicatePredictionFunctionMostSimilar(
-                keyed_vectors=keyed_vectors, data_set=data_set
+            return AveragePredicateMostSimilarPredictionFunction(
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
+            )
+        if self.value == "addition":
+            return AdditionPredictionFunction(
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
             )
 
 
@@ -116,7 +153,7 @@ class RandomPredictionFunction(PredictionFunctionInterface):
 
 class MostSimilarPredictionFunction(PredictionFunctionInterface):
     """This class simply calls the gensim "most_similar" function with (h,l) to predict t and with (l,t) to predict
-    h.
+    h. It is expected that an embedding for L exists.
     """
 
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
@@ -130,9 +167,13 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[1] and word != triple[2]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                # we do not want to predict the predicate:
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        # we allow for reflexive matches, there are no further restrictions:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[2]:
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )
@@ -149,23 +190,95 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[0] and word != triple[1]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        # we allow for reflexive matches, there are no further restrictions:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[0]:
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )
         return result_with_confidence
 
 
-class AveragePredicatePredictionFunction(PredictionFunctionInterface):
+class AdditionPredictionFunction(PredictionFunctionInterface):
+    """This class simply calls the gensim "most_similar" function with (H + L) to predict T and with (T - L) to predict
+    H. It is expected that an embedding for L exists.
+    """
+
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        l_vector = self._keyed_vectors.get_vector(triple[1])
+        t_vector = self._keyed_vectors.get_vector(triple[2])
+        lookup_vector = t_vector - l_vector
+
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector], topn=n
+        )
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._keyed_vectors.index2word[i]
+                # we do not want to predict the predicate:
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        # we allow for reflexive matches, there are no further restrictions:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[2]:
+                        new_result_with_confidence.append((word, similarity))
+
+            result_with_confidence = sorted(
+                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            )
+        return result_with_confidence
+
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        l_vector = self._keyed_vectors.get_vector(triple[1])
+        h_vector = self._keyed_vectors.get_vector(triple[0])
+        lookup_vector = h_vector + l_vector
+
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector], topn=n
+        )
+        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
+        # mapped manually.
+        if n is None:
+            new_result_with_confidence = []
+            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
+            for i, similarity in enumerate(result_with_confidence):
+                word = self._keyed_vectors.index2word[i]
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        # we allow for reflexive matches, there are no further restrictions:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[0]:
+                        new_result_with_confidence.append((word, similarity))
+            result_with_confidence = sorted(
+                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            )
+        return result_with_confidence
+
+
+class AveragePredicateAdditionPredictionFunction(PredictionFunctionInterface):
     """Prediction function where predicate embeddings are not taken as is but instead given multiple triples <H,L,T>,
     The vector T-H for each triple containing L is averaged to obtain a new vector for L.
     """
 
-    def __init__(self, keyed_vectors: KeyedVectors, data_set: DataSet):
+    def __init__(
+        self,
+        keyed_vectors: KeyedVectors,
+        data_set: DataSet,
+        is_reflexive_match_allowed: bool = False,
+    ):
         logger.info("Initializing AveragePredicatePredictionFunction")
-        super().__init__(keyed_vectors=keyed_vectors, data_set=data_set)
+        super().__init__(
+            keyed_vectors=keyed_vectors,
+            data_set=data_set,
+            is_reflexive_match_allowed=is_reflexive_match_allowed,
+        )
 
         # now we build a dictionary from predicate to (subject, object)
         all_triples = []
@@ -241,9 +354,11 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[0] and word != triple[1]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[0]:
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )
@@ -288,24 +403,36 @@ class AveragePredicatePredictionFunction(PredictionFunctionInterface):
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[1] and word != triple[2]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[2]:
+                        # avoid predicting the inputs
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )
         return result_with_confidence
 
 
-class AveragePredicatePredictionFunctionMostSimilar(PredictionFunctionInterface):
+class AveragePredicateMostSimilarPredictionFunction(PredictionFunctionInterface):
     """Prediction function where predicate embeddings are not taken as is but instead given multiple triples <H,L,T>,
     The vector T-H for each triple containing L is averaged to obtain a new vector for L.
     Predictions are made using most_similar(H,L) respectively most_similar(T,L).
     """
 
-    def __init__(self, keyed_vectors: KeyedVectors, data_set: DataSet):
+    def __init__(
+        self,
+        keyed_vectors: KeyedVectors,
+        data_set: DataSet,
+        is_reflexive_match_allowed: bool = False,
+    ):
         logger.info("Initializing AveragePredicatePredictionFunction")
-        super().__init__(keyed_vectors=keyed_vectors, data_set=data_set)
+        super().__init__(
+            keyed_vectors=keyed_vectors,
+            data_set=data_set,
+            is_reflexive_match_allowed=is_reflexive_match_allowed,
+        )
 
         # now we build a dictionary from predicate to (subject, object)
         all_triples = []
@@ -380,9 +507,12 @@ class AveragePredicatePredictionFunctionMostSimilar(PredictionFunctionInterface)
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[0] and word != triple[1]:
+                if word != triple[0]:
                     # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                    if self._is_reflexive_match_allowed:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[1]:
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )
@@ -426,9 +556,12 @@ class AveragePredicatePredictionFunctionMostSimilar(PredictionFunctionInterface)
             assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
             for i, similarity in enumerate(result_with_confidence):
                 word = self._keyed_vectors.index2word[i]
-                if word != triple[1] and word != triple[2]:
-                    # avoid predicting the inputs
-                    new_result_with_confidence.append((word, similarity))
+                if word != triple[1]:
+                    if self._is_reflexive_match_allowed:
+                        new_result_with_confidence.append((word, similarity))
+                    elif word != triple[2]:
+                        # avoid predicting the inputs
+                        new_result_with_confidence.append((word, similarity))
             result_with_confidence = sorted(
                 new_result_with_confidence, key=lambda x: x[1], reverse=True
             )

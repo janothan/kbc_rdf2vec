@@ -23,6 +23,7 @@ class Rdf2vecKbc:
         prediction_function: PredictionFunction = PredictionFunction.MOST_SIMILAR,
         file_for_predicate_exclusion: str = None,
         is_print_confidences: bool = False,
+        is_reflexive_match_allowed: bool = False,
     ):
         """Constructor
 
@@ -38,6 +39,10 @@ class Rdf2vecKbc:
             The RDF2Vec model learns embeddings for h,l,t but cannot differentiate between them afterwards. Hence,
             when doing predictions for h and t, it may also predict l. If the file used to train the embedding is given
             here, such relations will be removed from the proposal set.
+        is_print_confidences : bool
+            True if confidences shall be printed into the evaluation file. Default: False.
+        is_reflexive_match_allowed : bool
+            True if it is allowed to predict H in a <H, L, ?> task and T in a <?, L, T> task.
         """
         if not os.path.isfile(model_path):
             logger.error(
@@ -60,10 +65,12 @@ class Rdf2vecKbc:
         ):
             self._predicates = self._read_predicates(file_for_predicate_exclusion)
         self._prediction_function = prediction_function.get_instance(
-            keyed_vectors=self._vectors, data_set=self.data_set
+            keyed_vectors=self._vectors,
+            data_set=self.data_set,
+            is_reflexive_match_allowed=is_reflexive_match_allowed,
         )
 
-    def _read_predicates(self, file_for_predicate_exclusion) -> set:
+    def _read_predicates(self, file_for_predicate_exclusion: str) -> set:
         """Obtain predicates from the given nt file.
 
         Parameters
