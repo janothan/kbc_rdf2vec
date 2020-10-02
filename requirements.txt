@@ -7,15 +7,6 @@
 # tests/test_prediction.py: 2
 gensim == 3.8.0
 
-# kbc_rdf2vec/prediction.py: 8
-# kbc_rdf2vec/rdf2vec_kbc.py: 9,10
-# run.py: 1,2,3
-# server.py: 1,2
-# tests/test_dataset.py: 1
-# tests/test_prediction.py: 5
-# tests/test_rdf2vec_kbc.py: 3,4
-kbc_rdf2vec == 0.1
-
 # kbc_rdf2vec/prediction.py: 5
 # playground.py: 4
 # tests/test_prediction.py: 1
