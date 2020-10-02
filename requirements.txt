@@ -5,10 +5,6 @@
 # kbc_rdf2vec/rdf2vec_kbc.py: 4,6
 gensim == 3.8.0
 
-# kbc_rdf2vec/prediction.py: 8
-# kbc_rdf2vec/rdf2vec_kbc.py: 9,10
-kbc_rdf2vec == 0.1
-
 # kbc_rdf2vec/prediction.py: 5
 numpy == 1.19.1
 
