@@ -6,7 +6,7 @@ import logging.config
 import numpy as np
 from gensim.models import KeyedVectors
 from tensorflow import keras
-from keras import losses
+from tensorflow.keras import losses
 import os
 
 from kbc_rdf2vec.dataset import DataSet
