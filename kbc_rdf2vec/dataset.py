@@ -31,7 +31,7 @@ class DataSet(Enum):
         """
         return self._parse_tab_separated_data(self.test_set_path())
 
-    def train_set(self):
+    def train_set(self) -> List[List[str]]:
         """Get the parsed training dataset.
 
         Returns

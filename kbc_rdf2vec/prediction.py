@@ -4,6 +4,9 @@ from typing import List, Tuple, Any
 import logging.config
 import numpy as np
 from gensim.models import KeyedVectors
+from tensorflow import keras
+from keras import losses
+import os
 
 from kbc_rdf2vec.dataset import DataSet
 
@@ -51,6 +54,7 @@ class PredictionFunction(Enum):
     RANDOM = "random"
     PREDICATE_AVERAGING_ADDITION = "predicate_averaging_addition"
     PREDICATE_AVERAGING_MOST_SIMILAR = "predicate_averaging_most_similar"
+    ANN = "ann"
 
     def get_instance(
         self,
@@ -104,6 +108,188 @@ class PredictionFunction(Enum):
                 data_set=data_set,
                 is_reflexive_match_allowed=is_reflexive_match_allowed,
             )
+        if self.value == "ann":
+            return AnnPredictionFunction(
+                keyed_vectors=keyed_vectors,
+                data_set=data_set,
+                is_reflexive_match_allowed=is_reflexive_match_allowed,
+            )
+
+
+class AnnPredictionFunction(PredictionFunctionInterface):
+    """Artificial Neural Network Approach"""
+
+    def __init__(
+        self,
+        keyed_vectors: KeyedVectors,
+        data_set: DataSet,
+        is_reflexive_match_allowed: bool = False,
+    ):
+        """Constructor
+
+        Parameters
+        ----------
+        keyed_vectors : KeyedVectors
+            The keyed vector instance to be used to make predictions.
+        data_set : DataSet
+            The data set for which predictions shall be made.
+        is_reflexive_match_allowed : bool
+            True if it is allowed to predict H in a <H, L, ?> task and T in a <?, L, T> task.
+        """
+        self._keyed_vectors = keyed_vectors
+        self._data_set = data_set
+        self._is_reflexive_match_allowed = is_reflexive_match_allowed
+        self._is_validate = False
+
+        # required on macOS
+        os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
+        # obtain vector dimension (heuristically by determining the dimension of the first vocab entry)
+        dimension = len(self._keyed_vectors[self._keyed_vectors.index2word[0]])
+        input_shape = 2 * dimension
+
+        ann_layers = [
+            keras.Input(shape=input_shape),
+            keras.layers.Dense(dimension),
+            keras.layers.Dense(dimension),
+        ]
+
+        t_prediction_model = keras.Sequential(ann_layers)
+
+        h_prediction_model = keras.Sequential(ann_layers)
+
+        t_prediction_model.compile(loss=losses.mean_squared_error)
+        h_prediction_model.compile(loss=losses.mean_squared_error)
+
+        batch_size = 1000
+        epochs = 5
+
+        # training
+        x_data_t_training = []
+        x_data_h_training = []
+        y_data_t_training = []
+        y_data_h_training = []
+
+        # validation
+        x_data_t_validation = []
+        y_data_t_validation = []
+        x_data_h_validation = []
+        y_data_h_validation = []
+
+        # load the training data into the corresponding data structures
+        for triple in self._data_set.train_set():
+            try:
+                h_vector = self._keyed_vectors[triple[0]]
+                l_vector = self._keyed_vectors[triple[1]]
+                t_vector = self._keyed_vectors[triple[2]]
+                x_data_t_training.append(np.append(h_vector, l_vector))
+                y_data_t_training.append(np.array(t_vector))
+                x_data_h_training.append(np.append(l_vector, t_vector))
+                y_data_h_training.append(np.array(h_vector))
+            except KeyError:
+                logger.error(
+                    f"Error linking (training) triple to vectors: \n\t{triple[0]}\t{triple[1]}\t{triple[2]}"
+                )
+                continue  # ...with the next triple
+
+        if self._is_validate:
+            # we do validate, hence we write the data to the validation structure
+            for triple in self._data_set.valid_set():
+                try:
+                    h_vector = self._keyed_vectors[triple[0]]
+                    l_vector = self._keyed_vectors[triple[1]]
+                    t_vector = self._keyed_vectors[triple[2]]
+
+                    # for predicting t
+                    x_data_t_validation.append(np.append(h_vector, l_vector))
+                    y_data_t_validation.append(np.array(t_vector))
+
+                    # for predicting h
+                    x_data_h_validation.append(np.append(l_vector, t_vector))
+                    y_data_h_validation.append(np.array(h_vector))
+                except KeyError:
+                    logger.error(
+                        f"Error linking (validation) triple to vectors: \n\t{triple[0]}\t{triple[1]}\t{triple[2]}"
+                    )
+                    continue  # ...with the next triple
+        else:
+            # we do not validate
+            # just add the validation data to the training data
+            for triple in self._data_set.valid_set():
+                try:
+                    h_vector = self._keyed_vectors[triple[0]]
+                    l_vector = self._keyed_vectors[triple[1]]
+                    t_vector = self._keyed_vectors[triple[2]]
+
+                    # for predicting t
+                    x_data_t_training.append(np.append(h_vector, l_vector))
+                    y_data_t_training.append(np.array(t_vector))
+
+                    # for predicting h
+                    x_data_h_training.append(np.append(l_vector, t_vector))
+                    y_data_h_training.append(np.array(h_vector))
+                except KeyError:
+                    logger.error(
+                        f"Error linking (validation) triple to vectors: \n\t{triple[0]}\t{triple[1]}\t{triple[2]}"
+                    )
+                    continue  # ...with the next triple
+
+        x_data_t_training = np.array(x_data_t_training)
+        y_data_t_training = np.array(y_data_t_training)
+        x_data_h_training = np.array(x_data_h_training)
+        y_data_h_training = np.array(y_data_h_training)
+
+        t_prediction_model.fit(
+            x=x_data_t_training,
+            y=y_data_t_training,
+            batch_size=batch_size,
+            epochs=epochs,
+        )
+        h_prediction_model.fit(
+            x=x_data_h_training,
+            y=y_data_h_training,
+            batch_size=batch_size,
+            epochs=epochs,
+        )
+
+        if self._is_validate:
+            x_data_h_validation = np.array(x_data_h_validation)
+            y_data_h_validation = np.array(y_data_h_validation)
+            x_data_t_validation = np.array(x_data_t_validation)
+            y_data_t_validation = np.array(y_data_t_validation)
+
+            t_score = t_prediction_model.evaluate(
+                x_data_t_validation, y_data_t_validation, verbose=0
+            )
+            h_score = h_prediction_model.evaluate(
+                x_data_h_validation, y_data_h_validation, verbose=0
+            )
+
+            logger.info(f"T Prediction Score: {t_score}")
+            logger.info(f"H Prediction Score: {h_score}")
+
+        self.t_prediction_model = t_prediction_model
+        self.h_prediction_model = h_prediction_model
+
+
+def main():
+    ann = AnnPredictionFunction(
+        keyed_vectors=KeyedVectors.load("./fb15k_vectors/model.kv", mmap="r"),
+        data_set=DataSet.FB15K,
+        is_reflexive_match_allowed=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
+
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        # TODO implement
+        pass
+
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        # TODO implement
+        pass
 
 
 class RandomPredictionFunction(PredictionFunctionInterface):

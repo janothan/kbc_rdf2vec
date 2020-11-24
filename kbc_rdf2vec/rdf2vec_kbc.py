@@ -112,7 +112,7 @@ class Rdf2vecKbc:
             string_to_process = string_to_process[: len(string_to_process) - 1]
         return string_to_process
 
-    def predict(self, file_to_write: str):
+    def predict(self, file_to_write: str) -> None:
         """Performs the actual predictions. A file will be generated.
 
         Parameters
