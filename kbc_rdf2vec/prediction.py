@@ -377,18 +377,6 @@ class AnnPredictionFunction(PredictionFunction):
             return result_with_confidence
 
 
-def main():
-    ann = AnnPredictionFunction(
-        keyed_vectors=KeyedVectors.load("./fb15k_vectors/model.kv", mmap="r"),
-        data_set=DataSet.FB15K,
-        is_reflexive_match_allowed=False,
-    )
-
-
-if __name__ == "__main__":
-    main()
-
-
 class RandomPredictionFunction(PredictionFunction):
     """This class randomly picks results for h and t."""
 
