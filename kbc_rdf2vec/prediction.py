@@ -8,9 +8,7 @@ from gensim.models import KeyedVectors
 from tensorflow import keras
 from keras import losses
 import os
-
-from kbc_rdf2vec.dataset import DataSet
-
+from .rdf2vec_kbc import DataSet
 
 logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)

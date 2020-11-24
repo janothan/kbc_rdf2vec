@@ -6,9 +6,9 @@ import logging.config
 from gensim.models import KeyedVectors
 from typing import List, Any, Tuple
 from tqdm import tqdm
-from kbc_rdf2vec.dataset import DataSet
-from kbc_rdf2vec.prediction import PredictionFunctionEnum
 
+from .dataset import DataSet
+from .prediction import PredictionFunctionEnum
 
 logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
