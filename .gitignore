@@ -160,3 +160,4 @@ fb15k_random.txt
 wn_predicate_averaging.txt
 wn_predicate_averaging_with_pprediction.txt
 wn_predicate_averaging_most_similar.txt
+strategy_grid_data/*
