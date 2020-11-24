@@ -7,7 +7,7 @@ from gensim.models import KeyedVectors
 from typing import List, Any, Tuple
 from tqdm import tqdm
 from kbc_rdf2vec.dataset import DataSet
-from kbc_rdf2vec.prediction import PredictionFunction
+from kbc_rdf2vec.prediction import PredictionFunctionEnum
 
 
 logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
@@ -20,7 +20,7 @@ class Rdf2vecKbc:
         model_path: str,
         data_set: DataSet,
         n: Any = 10,
-        prediction_function: PredictionFunction = PredictionFunction.MOST_SIMILAR,
+        prediction_function: PredictionFunctionEnum = PredictionFunctionEnum.MOST_SIMILAR,
         file_for_predicate_exclusion: str = None,
         is_print_confidences: bool = False,
         is_reflexive_match_allowed: bool = False,

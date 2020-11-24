@@ -1,3 +1,4 @@
+import sys
 from enum import Enum
 from random import randint, random
 from typing import List, Tuple, Any
@@ -15,8 +16,8 @@ logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
 
-class PredictionFunctionInterface:
-    """Interface for prediction functions."""
+class PredictionFunction:
+    """Abstract class for prediction functions."""
 
     def __init__(
         self,
@@ -39,6 +40,40 @@ class PredictionFunctionInterface:
         self._data_set = data_set
         self._is_reflexive_match_allowed = is_reflexive_match_allowed
 
+    def transform_to_list(
+        self, result_with_confidence, triple: List[str], is_predict_head: bool
+    ) -> List[Tuple[str, float]]:
+        """If n is none, the result type of the most_similar action is a numpy array that needs to be mapped manually.
+
+        Parameters
+        ----------
+        result_with_confidence
+        triple : List[str]
+        is_predict_head: bool
+            True if we just predicted the head.
+
+        Returns
+        -------
+        List[Tuple[str, float]]
+        """
+        new_result_with_confidence = []
+        assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
+        for i, similarity in enumerate(result_with_confidence):
+            word = self._keyed_vectors.index2word[i]
+            # we do not want to predict the predicate:
+            if word != triple[1]:
+                if self._is_reflexive_match_allowed:
+                    # we allow for reflexive matches, there are no further restrictions:
+                    new_result_with_confidence.append((word, similarity))
+                elif not is_predict_head and word != triple[2]:
+                    new_result_with_confidence.append((word, similarity))
+                elif is_predict_head and word != triple[0]:
+                    new_result_with_confidence.append((word, similarity))
+        result_with_confidence = sorted(
+            new_result_with_confidence, key=lambda x: x[1], reverse=True
+        )
+        return result_with_confidence
+
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         pass
 
@@ -46,7 +81,7 @@ class PredictionFunctionInterface:
         pass
 
 
-class PredictionFunction(Enum):
+class PredictionFunctionEnum(Enum):
     """An enumeration with the implemented similarity functions."""
 
     MOST_SIMILAR = "most_similar"
@@ -61,7 +96,7 @@ class PredictionFunction(Enum):
         keyed_vectors: KeyedVectors,
         data_set: DataSet,
         is_reflexive_match_allowed: bool = False,
-    ) -> PredictionFunctionInterface:
+    ) -> PredictionFunction:
         """Obtain the accompanying instance.
 
         Parameters
@@ -75,7 +110,7 @@ class PredictionFunction(Enum):
 
         Returns
         -------
-        PredictionFunctionInterface
+        PredictionFunction
             An instance of the PredictionFunctionInterface.
         """
         if self.value == "most_similar":
@@ -116,7 +151,7 @@ class PredictionFunction(Enum):
             )
 
 
-class AnnPredictionFunction(PredictionFunctionInterface):
+class AnnPredictionFunction(PredictionFunction):
     """Artificial Neural Network Approach"""
 
     def __init__(
@@ -125,7 +160,7 @@ class AnnPredictionFunction(PredictionFunctionInterface):
         data_set: DataSet,
         is_reflexive_match_allowed: bool = False,
     ):
-        """Constructor
+        """Constructor. Note that for this prediction function the NNs are immediately learnt.
 
         Parameters
         ----------
@@ -139,30 +174,34 @@ class AnnPredictionFunction(PredictionFunctionInterface):
         self._keyed_vectors = keyed_vectors
         self._data_set = data_set
         self._is_reflexive_match_allowed = is_reflexive_match_allowed
+
+        # set this to true to train only with train and to evaluate with the validation set
         self._is_validate = False
 
-        # required on macOS
-        os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+        # set ann details here
+        batch_size = 1000
+        epochs = 5
 
         # obtain vector dimension (heuristically by determining the dimension of the first vocab entry)
         dimension = len(self._keyed_vectors[self._keyed_vectors.index2word[0]])
         input_shape = 2 * dimension
 
+        # set ann details here
         ann_layers = [
             keras.Input(shape=input_shape),
             keras.layers.Dense(dimension),
             keras.layers.Dense(dimension),
         ]
 
+        # required on macOS
+        if sys.platform == "darwin":
+            os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
+        # same architecture for both models
         t_prediction_model = keras.Sequential(ann_layers)
-
         h_prediction_model = keras.Sequential(ann_layers)
-
         t_prediction_model.compile(loss=losses.mean_squared_error)
         h_prediction_model.compile(loss=losses.mean_squared_error)
-
-        batch_size = 1000
-        epochs = 5
 
         # training
         x_data_t_training = []
@@ -253,6 +292,7 @@ class AnnPredictionFunction(PredictionFunctionInterface):
         )
 
         if self._is_validate:
+            # perform the actual validation
             x_data_h_validation = np.array(x_data_h_validation)
             y_data_h_validation = np.array(y_data_h_validation)
             x_data_t_validation = np.array(x_data_t_validation)
@@ -268,8 +308,75 @@ class AnnPredictionFunction(PredictionFunctionInterface):
             logger.info(f"T Prediction Score: {t_score}")
             logger.info(f"H Prediction Score: {h_score}")
 
-        self.t_prediction_model = t_prediction_model
-        self.h_prediction_model = h_prediction_model
+        self._t_prediction_model = t_prediction_model
+        self._h_prediction_model = h_prediction_model
+
+    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        result = []
+        try:
+            t_vector = self._keyed_vectors.get_vector(triple[2])
+        except KeyError:
+            logger.error(f"Could not find the head {triple[2]} in the vector space.")
+            return result
+        try:
+            l_vector = self._keyed_vectors.get_vector(triple[1])
+        except KeyError:
+            logger.error(
+                f"Could not find the predicate {triple[1]} in the averaged vector space."
+            )
+            return result
+        lt_merged_vector = np.array([np.append(l_vector, t_vector)])
+        lookup_vector = self._h_prediction_model.predict(lt_merged_vector)
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector[0]], topn=n
+        )
+        if n is None:
+            return self.transform_to_list(
+                result_with_confidence, triple, is_predict_head=True
+            )
+        else:
+            return result_with_confidence
+
+    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
+        """In the random case, there is no difference between predict_heads and predict_tails.
+
+        Parameters
+        ----------
+        triple: List[str]
+            Triple for which the tails shall be predicted.
+        n: Any
+            Number of predictions to make. Set to None to obtain all possible predictions.
+
+        Returns
+        -------
+        List[Tuple[str, float]
+            List of predictions with confidences.
+        """
+        result = []
+        try:
+            h_vector = self._keyed_vectors.get_vector(triple[0])
+        except KeyError:
+            logger.error(f"Could not find the head {triple[0]} in the vector space.")
+            return result
+        try:
+            l_vector = self._keyed_vectors.get_vector(triple[1])
+        except KeyError:
+            logger.error(
+                f"Could not find the predicate {triple[1]} in the averaged vector space."
+            )
+            return result
+        lookup_vector = self._t_prediction_model.predict(
+            np.array([np.append(h_vector, l_vector)])
+        )
+        result_with_confidence = self._keyed_vectors.most_similar(
+            positive=[lookup_vector[0]], topn=n
+        )
+        if n is None:
+            return self.transform_to_list(
+                result_with_confidence, triple, is_predict_head=False
+            )
+        else:
+            return result_with_confidence
 
 
 def main():
@@ -283,16 +390,8 @@ def main():
 if __name__ == "__main__":
     main()
 
-    def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
-        # TODO implement
-        pass
 
-    def predict_tails(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
-        # TODO implement
-        pass
-
-
-class RandomPredictionFunction(PredictionFunctionInterface):
+class RandomPredictionFunction(PredictionFunction):
     """This class randomly picks results for h and t."""
 
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
@@ -337,7 +436,7 @@ class RandomPredictionFunction(PredictionFunctionInterface):
         return self.predict_heads(triple=triple, n=n)
 
 
-class MostSimilarPredictionFunction(PredictionFunctionInterface):
+class MostSimilarPredictionFunction(PredictionFunction):
     """This class simply calls the gensim "most_similar" function with (h,l) to predict t and with (l,t) to predict
     h. It is expected that an embedding for L exists.
     """
@@ -349,21 +448,11 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
         # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
         # mapped manually.
         if n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._keyed_vectors.index2word[i]
-                # we do not want to predict the predicate:
-                if word != triple[1]:
-                    if self._is_reflexive_match_allowed:
-                        # we allow for reflexive matches, there are no further restrictions:
-                        new_result_with_confidence.append((word, similarity))
-                    elif word != triple[2]:
-                        new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(
-                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            return self.transform_to_list(
+                result_with_confidence, triple, is_predict_head=True
             )
-        return result_with_confidence
+        else:
+            return result_with_confidence
 
     def predict_tails(self, triple: List[str], n: int) -> List[Tuple[str, float]]:
         result_with_confidence = self._keyed_vectors.most_similar(
@@ -372,23 +461,14 @@ class MostSimilarPredictionFunction(PredictionFunctionInterface):
         # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
         # mapped manually.
         if n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._keyed_vectors.index2word[i]
-                if word != triple[1]:
-                    if self._is_reflexive_match_allowed:
-                        # we allow for reflexive matches, there are no further restrictions:
-                        new_result_with_confidence.append((word, similarity))
-                    elif word != triple[0]:
-                        new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(
-                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            return self.transform_to_list(
+                result_with_confidence, triple, is_predict_head=False
             )
-        return result_with_confidence
+        else:
+            return result_with_confidence
 
 
-class AdditionPredictionFunction(PredictionFunctionInterface):
+class AdditionPredictionFunction(PredictionFunction):
     """This class simply calls the gensim "most_similar" function with (H + L) to predict T and with (T - L) to predict
     H. It is expected that an embedding for L exists.
     """
@@ -448,7 +528,7 @@ class AdditionPredictionFunction(PredictionFunctionInterface):
         return result_with_confidence
 
 
-class AveragePredicateAdditionPredictionFunction(PredictionFunctionInterface):
+class AveragePredicateAdditionPredictionFunction(PredictionFunction):
     """Prediction function where predicate embeddings are not taken as is but instead given multiple triples <H,L,T>,
     The vector T-H for each triple containing L is averaged to obtain a new vector for L.
     """
@@ -601,7 +681,7 @@ class AveragePredicateAdditionPredictionFunction(PredictionFunctionInterface):
         return result_with_confidence
 
 
-class AveragePredicateMostSimilarPredictionFunction(PredictionFunctionInterface):
+class AveragePredicateMostSimilarPredictionFunction(PredictionFunction):
     """Prediction function where predicate embeddings are not taken as is but instead given multiple triples <H,L,T>,
     The vector T-H for each triple containing L is averaged to obtain a new vector for L.
     Predictions are made using most_similar(H,L) respectively most_similar(T,L).

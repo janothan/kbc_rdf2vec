@@ -3,7 +3,7 @@ from gensim.models import KeyedVectors
 
 from kbc_rdf2vec.dataset import DataSet
 from kbc_rdf2vec.prediction import (
-    PredictionFunction,
+    PredictionFunctionEnum,
     RandomPredictionFunction,
     AveragePredicateAdditionPredictionFunction,
 )
@@ -12,7 +12,7 @@ from kbc_rdf2vec.prediction import (
 class TestPredictionFunction:
     def test_get_instance(self) -> None:
         kv = KeyedVectors.load("./tests/test_resources/mini_3d_wn_model.kv", mmap="r")
-        for function in PredictionFunction:
+        for function in PredictionFunctionEnum:
             assert (
                 function.get_instance(keyed_vectors=kv, data_set=DataSet.WN18)
                 is not None
@@ -21,7 +21,7 @@ class TestPredictionFunction:
     def test_implementation_of_all_prediction_functions(self) -> None:
         """Test whether implementations exist and whether reflexivity is implemented."""
         kv = KeyedVectors.load("./tests/test_resources/mini_3d_wn_model.kv", mmap="r")
-        for function in PredictionFunction:
+        for function in PredictionFunctionEnum:
             # forbid reflexive
             function_instance = function.get_instance(
                 keyed_vectors=kv,
@@ -40,8 +40,8 @@ class TestPredictionFunction:
 
             # allow reflexive (but exclude most similar due to implementation of gensim excluding those always)
             if (
-                function == PredictionFunction.MOST_SIMILAR
-                or function == PredictionFunction.PREDICATE_AVERAGING_MOST_SIMILAR
+                function == PredictionFunctionEnum.MOST_SIMILAR
+                or function == PredictionFunctionEnum.PREDICATE_AVERAGING_MOST_SIMILAR
             ):
                 continue
 
