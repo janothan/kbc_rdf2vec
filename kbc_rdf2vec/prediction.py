@@ -42,7 +42,9 @@ class PredictionFunction:
     def transform_to_sorted_list(
         self, result_with_confidence, triple: List[str], is_predict_head: bool
     ) -> List[Tuple[str, float]]:
-        """If n is none, the result type of the most_similar action is a numpy array that needs to be mapped manually.
+        """If n is none, the result type of the most_similar action in gensim is a numpy array that needs to be mapped
+        manually to the vocabulary. This implementation will stop processing the list after the correct solution has
+        been found.
 
         Parameters
         ----------
@@ -72,6 +74,12 @@ class PredictionFunction:
                     # we predict the head and the word must not be the tail of the statement
                     # (b/c is_reflexive_match_allowed == True).
                     new_result_with_confidence.append((word, similarity))
+            if is_predict_head and word == triple[0]:
+                # we found the correct solution, there is no reason to continue here
+                break
+            elif not is_predict_head and word == triple[2]:
+                # we found the correct solution, there is no reason to continue here
+                break
         result_with_confidence = sorted(
             new_result_with_confidence, key=lambda x: x[1], reverse=True
         )
@@ -183,7 +191,7 @@ class AnnPredictionFunction(PredictionFunction):
 
         # set ann details here
         batch_size = 1000
-        epochs = 5
+        epochs = 15
 
         # obtain vector dimension (heuristically by determining the dimension of the first vocab entry)
         dimension = len(self._keyed_vectors[self._keyed_vectors.index2word[0]])
@@ -490,23 +498,14 @@ class AdditionPredictionFunction(PredictionFunction):
         result_with_confidence = self._keyed_vectors.most_similar(
             positive=[lookup_vector], topn=n
         )
-        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
-        # mapped manually.
+        # important: if n is none, the result type of the most_similar action is a numpy array with confidences that
+        # needs to be mapped manually to the vocabulary.
         if n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._keyed_vectors.index2word[i]
-                if word != triple[1]:
-                    if self._is_reflexive_match_allowed:
-                        # we allow for reflexive matches, there are no further restrictions:
-                        new_result_with_confidence.append((word, similarity))
-                    elif word != triple[0]:
-                        new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(
-                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            return self.transform_to_sorted_list(
+                result_with_confidence, triple, is_predict_head=False
             )
-        return result_with_confidence
+        else:
+            return result_with_confidence
 
 
 class AveragePredicateAdditionPredictionFunction(PredictionFunction):
@@ -594,22 +593,14 @@ class AveragePredicateAdditionPredictionFunction(PredictionFunction):
             positive=[lookup_vector], topn=n
         )
 
-        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
-        # mapped manually.
+        # important: if n is none, the result type of the most_similar action is a numpy array with confidences that
+        # needs to be mapped manually to the vocabulary.
         if n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._keyed_vectors.index2word[i]
-                if word != triple[1]:
-                    if self._is_reflexive_match_allowed:
-                        new_result_with_confidence.append((word, similarity))
-                    elif word != triple[0]:
-                        new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(
-                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            return self.transform_to_sorted_list(
+                result_with_confidence, triple, is_predict_head=False
             )
-        return result_with_confidence
+        else:
+            return result_with_confidence
 
     def predict_heads(self, triple: List[str], n: Any) -> List[Tuple[str, float]]:
         """Predictions are made using most_similar(T-L) where L is an averaged vector.
@@ -643,23 +634,14 @@ class AveragePredicateAdditionPredictionFunction(PredictionFunction):
             positive=[lookup_vector], topn=n
         )
 
-        # important: if n is none, the result type of the most_similar action is a numpy array that needs to be
-        # mapped manually.
+        # important: if n is none, the result type of the most_similar action is a numpy array with confidences that
+        # needs to be mapped manually to the vocabulary.
         if n is None:
-            new_result_with_confidence = []
-            assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
-            for i, similarity in enumerate(result_with_confidence):
-                word = self._keyed_vectors.index2word[i]
-                if word != triple[1]:
-                    if self._is_reflexive_match_allowed:
-                        new_result_with_confidence.append((word, similarity))
-                    elif word != triple[2]:
-                        # avoid predicting the inputs
-                        new_result_with_confidence.append((word, similarity))
-            result_with_confidence = sorted(
-                new_result_with_confidence, key=lambda x: x[1], reverse=True
+            return self.transform_to_sorted_list(
+                result_with_confidence, triple, is_predict_head=True
             )
-        return result_with_confidence
+        else:
+            return result_with_confidence
 
 
 class AveragePredicateMostSimilarPredictionFunction(PredictionFunction):

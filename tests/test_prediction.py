@@ -84,10 +84,18 @@ class TestPredictionFunction:
                 keyed_vectors=kv, data_set=DataSet.WN18, is_reflexive_match_allowed=True
             )
             assert function_instance is not None
+
+            # make sure the solution is found (head prediction)
             result = function_instance.predict_heads([h, l, t], n=None)
-            assert t in (item[0] for item in result)
+            assert h in (
+                item[0] for item in result
+            ), f"Head {h} not found in prediction of function {function}."
+
+            # make sure the solution is found (tail prediction)
             result = function_instance.predict_tails([h, l, t], n=None)
-            assert h in (item[0] for item in result)
+            assert t in (
+                item[0] for item in result
+            ), f"Tail {t} not found in prediction of function {function}."
 
 
 class TestRandomPredictionFunction:
