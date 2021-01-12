@@ -1,6 +1,10 @@
+import os
 from enum import Enum
 import io
 from typing import List
+
+# making sure that the relative path works
+package_directory = os.path.dirname(os.path.abspath(__file__))
 
 
 class DataSet(Enum):
@@ -11,14 +15,20 @@ class DataSet(Enum):
     """
 
     FB15K = (
-        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-test.txt",
-        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-train.txt",
-        "./kbc_rdf2vec/datasets/fb15k/freebase_mtr100_mte100-valid.txt",
+        os.path.join(
+            package_directory, "datasets", "fb15k", "freebase_mtr100_mte100-test.txt"
+        ),
+        os.path.join(
+            package_directory, "datasets", "fb15k", "freebase_mtr100_mte100-train.txt"
+        ),
+        os.path.join(
+            package_directory, "datasets", "fb15k", "freebase_mtr100_mte100-valid.txt"
+        ),
     )
     WN18 = (
-        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-test.txt",
-        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-train.txt",
-        "./kbc_rdf2vec/datasets/wn18/wordnet-mlj12-valid.txt",
+        os.path.join(package_directory, "datasets", "wn18", "wordnet-mlj12-test.txt"),
+        os.path.join(package_directory, "datasets", "wn18", "wordnet-mlj12-train.txt"),
+        os.path.join(package_directory, "datasets", "wn18", "wordnet-mlj12-valid.txt"),
     )
 
     def test_set(self) -> List[List[str]]:
