@@ -10,7 +10,8 @@ from tqdm import tqdm
 from kbc_rdf2vec.dataset import DataSet
 from kbc_rdf2vec.prediction import PredictionFunctionEnum
 
-logging.config.fileConfig(fname="log.conf", disable_existing_loggers=False)
+logconf_file = os.path.join(os.path.dirname(__file__), "log.conf")
+logging.config.fileConfig(fname=logconf_file, disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
 
