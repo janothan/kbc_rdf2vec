@@ -124,10 +124,16 @@ class Rdf2vecKbc:
         with open(file_to_write, "w+", encoding="utf8") as f:
             erroneous_triples = 0
             print("Predicting Tails and Heads")
+
+            if self._prediction_function.requires_predicates:
+                is_skip_predicate = False
+            else:
+                is_skip_predicate = True
+
             with tqdm(total=len(self.test_set), file=sys.stdout) as pbar:
                 for triple in self.test_set:
                     logger.debug(f"Processing triple: {triple}")
-                    if self._check_triple(triple):
+                    if self._check_triple(triple, is_skip_predicate=is_skip_predicate):
                         f.write(f"{triple[0]} {triple[1]} {triple[2]}\n")
                         heads = self._predict_heads(triple)
                         tails = self._predict_tails(triple)
@@ -226,7 +232,7 @@ class Rdf2vecKbc:
                 result.append(entry)
         return result
 
-    def _check_triple(self, triple: List[str]) -> bool:
+    def _check_triple(self, triple: List[str], is_skip_predicate: bool = True) -> bool:
         """Triples can only be processed if all three elements are available in the vector space. This methods
         checks for exactly this.
 
@@ -234,6 +240,8 @@ class Rdf2vecKbc:
         ----------
         triple : List[str]
             The triple that shall be checked.
+        is_skip_predicate : bool
+            If True, the predicate will not be checked.
 
         Returns
         -------
@@ -242,7 +250,8 @@ class Rdf2vecKbc:
         """
         try:
             self._vectors.get_vector(triple[0])
-            self._vectors.get_vector(triple[1])
+            if not is_skip_predicate:
+                self._vectors.get_vector(triple[1])
             self._vectors.get_vector(triple[2])
             return True
         except KeyError:

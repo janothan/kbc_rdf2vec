@@ -40,6 +40,9 @@ class PredictionFunction:
         self._data_set = data_set
         self._is_reflexive_match_allowed = is_reflexive_match_allowed
 
+        # by default predicates are required, can be overwritten:
+        self.requires_predicates = True
+
     def transform_to_sorted_list(
         self, result_with_confidence, triple: List[str], is_predict_head: bool
     ) -> List[Tuple[str, float]]:
@@ -62,7 +65,7 @@ class PredictionFunction:
         assert len(result_with_confidence) == len(self._keyed_vectors.vocab)
         for i, similarity in enumerate(result_with_confidence):
             word = self._keyed_vectors.index2word[i]
-            # we do not want to predict the predicate:
+            # we do not want to predict the prediacate:
             if word != triple[1]:
                 if self._is_reflexive_match_allowed:
                     # we allow for reflexive matches, there are no further restrictions:
@@ -527,6 +530,8 @@ class AveragePredicateAdditionPredictionFunction(PredictionFunction):
             is_reflexive_match_allowed=is_reflexive_match_allowed,
         )
 
+        self.requires_predicates = False
+
         # now we build a dictionary from predicate to (subject, object)
         all_triples = []
         all_triples.extend(data_set.valid_set())
@@ -537,7 +542,7 @@ class AveragePredicateAdditionPredictionFunction(PredictionFunction):
             if triple[1] not in p_to_so:
                 p_to_so[triple[1]] = {(triple[0], triple[2])}
             else:
-                p_to_so[triple[1]].add((triple[0], triple[1]))
+                p_to_so[triple[1]].add((triple[0], triple[2]))
 
         self.p_to_mean = {}
         for p, so in p_to_so.items():
@@ -664,6 +669,8 @@ class AveragePredicateMostSimilarPredictionFunction(PredictionFunction):
             is_reflexive_match_allowed=is_reflexive_match_allowed,
         )
 
+        self.requires_predicates = False
+
         # now we build a dictionary from predicate to (subject, object)
         all_triples = []
         all_triples.extend(data_set.valid_set())
@@ -674,7 +681,7 @@ class AveragePredicateMostSimilarPredictionFunction(PredictionFunction):
             if triple[1] not in p_to_so:
                 p_to_so[triple[1]] = {(triple[0], triple[2])}
             else:
-                p_to_so[triple[1]].add((triple[0], triple[1]))
+                p_to_so[triple[1]].add((triple[0], triple[2]))
 
         self.p_to_mean = {}
         for p, so in p_to_so.items():
