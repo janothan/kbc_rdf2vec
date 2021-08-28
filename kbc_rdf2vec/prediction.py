@@ -186,9 +186,11 @@ class AnnPredictionFunction(PredictionFunction):
         is_reflexive_match_allowed : bool
             True if it is allowed to predict H in a <H, L, ?> task and T in a <?, L, T> task.
         """
-        self._keyed_vectors = keyed_vectors
-        self._data_set = data_set
-        self._is_reflexive_match_allowed = is_reflexive_match_allowed
+        super().__init__(
+            keyed_vectors=keyed_vectors,
+            data_set=data_set,
+            is_reflexive_match_allowed=is_reflexive_match_allowed,
+        )
 
         # set this to true to train only with train and to evaluate with the validation set
         self._is_validate = False
